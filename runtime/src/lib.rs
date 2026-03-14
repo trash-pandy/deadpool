@@ -98,7 +98,18 @@ impl Runtime {
         match self {
             #[cfg(feature = "tokio_1")]
             Self::Tokio1 => {
-                drop(tokio_1::task::spawn_blocking(f));
+                match tokio_1::runtime::Handle::try_current() {
+                    Ok(handle) => drop(handle.spawn_blocking(f)),
+                    Err(_) => {
+                        match tokio_1::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                        {
+                            Ok(rt) => drop(rt.spawn_blocking(f)),
+                            Err(e) => return Err(SpawnBlockingError::Panic(Box::new(e))),
+                        }
+                    }
+                }
                 Ok(())
             }
             #[cfg(feature = "async-std_1")]
