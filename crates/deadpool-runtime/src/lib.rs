@@ -122,7 +122,18 @@ where
     match runtime {
         #[cfg(feature = "tokio_1")]
         Runtime::Tokio1 => {
-            drop(tokio_1::task::spawn_blocking(f));
+            match tokio_1::runtime::Handle::try_current() {
+                Ok(handle) => drop(handle.spawn_blocking(f)),
+                Err(_) => {
+                    match tokio_1::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    {
+                        Ok(rt) => drop(rt.spawn_blocking(f)),
+                        Err(_) => return Err(SpawnBlockingError::Cancelled),
+                    }
+                }
+            }
             Ok(())
         }
         #[cfg(feature = "async-std_1")]
